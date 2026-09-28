@@ -1,0 +1,40 @@
+(ql:quickload :cl-ppcre) ; Uses CL-PPCRE for regex tokenization
+
+(defun tokenize (text)
+  "Splits text into lowercase word tokens."
+  (cl-ppcre:all-matches-as-strings "\\b[a-zA-L0-9]+\\b" (string-downcase text)))
+
+(defun frequency-table (tokens)
+  "Creates an alist of (word . count)."
+  (let ((counts '()))
+    (dolist (token tokens counts)
+      (let ((pair (assoc token counts :test #'string=)))
+        (if pair
+            (incf (cdr pair))
+            (push (cons token 1) counts))))))
+
+(defun extract-keywords-pnt (text &key (top-n 5))
+  "Extracts top keywords using PNT logarithmic density weight."
+  (let* ((tokens (tokenize text))
+         (total-words (length tokens))
+         (freqs (frequency-table tokens))
+         ;; Sort by frequency descending
+         (sorted-freqs (sort freqs #'> :key #'cdr))
+         (scored-words '()))
+    
+    (loop for (word . count) in sorted-freqs
+          for rank from 1
+          do (let* ((adjusted-rank (max rank 2))
+                    (pnt-weight (log adjusted-rank))
+                    (tf (/ count total-words))
+                    (score (* tf pnt-weight)))
+               (when (> (length word) 2)
+                 (push (cons word score) scored-words))))
+    
+    ;; Sort by PNT score descending and return top-N
+    (subseq (sort scored-words #'> :key #'cdr)
+            0
+            (min top-n (length scored-words)))))
+
+;; Example Usage:
+;; (extract-keywords-pnt "Quantum computing leverages the principles of quantum mechanics to solve complex computational problems faster than classical supercomputers." :top-n 4)
